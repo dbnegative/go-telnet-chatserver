@@ -1,4 +1,4 @@
-# Go Telnet/TCP Chat Server
+# Go Telnet/TCP Chat Server [![Build Status](https://drone.io/github.com/dbnegative/go-telnet-chatserver/status.png)](https://drone.io/github.com/dbnegative/go-telnet-chatserver/latest)
 A basic multi client, multiroom tcp chat server written in GO, can be accessed with telnet. I wrote this to further explore GO routines, unbuffered channels and the net package. Only tested on OSX. Supports basic multi room and multiple simultaneous connections.  
 
 ## Build
