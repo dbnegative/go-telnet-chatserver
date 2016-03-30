@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -83,20 +84,20 @@ func createclient(conn net.Conn) {
 	go client.recieve()
 
 	//print help
-	client.help()
+	writeFormattedMsg(conn, help)
 }
 
 func (c *client) close() {
 	c.leave()
 	c.Conn.Close()
 	c.Message <- "\\quit"
-	delete(roomList, c.Conn.RemoteAddr().String())
 }
 
 func (c *client) recieve() {
 	for {
 		msg := <-c.Message
 		if msg == "\\quit" {
+			roomList[c.Room].announce(c.Name + " has left..")
 			break
 		}
 		log.Printf("recieve: client(%v) recvd msg: %s ", c.Conn.RemoteAddr(), msg)
@@ -113,8 +114,8 @@ Loop:
 		}
 
 		if msg == "\\quit" {
-			log.Printf("%v has left..", c.Name)
 			c.close()
+			log.Printf("%v has left..", c.Name)
 			break Loop
 		}
 
@@ -143,7 +144,7 @@ func (c *client) command(msg string) bool {
 			for range roomList[k].members {
 				count++
 			}
-			c.Conn.Write([]byte(k + " members(" + strconv.Itoa(count) + ")\n"))
+			c.Conn.Write([]byte(k + " : online members(" + strconv.Itoa(count) + ")\n"))
 		}
 		c.Conn.Write([]byte("-------------------\n"))
 		return false
@@ -151,7 +152,7 @@ func (c *client) command(msg string) bool {
 		c.join()
 		return false
 	case msg == "\\help":
-		c.help()
+		writeFormattedMsg(c.Conn, help)
 		return false
 	case msg == "\\create":
 		c.create()
@@ -172,29 +173,25 @@ func (c *client) join() {
 
 		if c.Room != "" {
 			c.leave()
+			cr.announce(c.Name + " has left..")
 		}
 
 		c.Room = roomName
-		cr.announce(c.Name + " has joined!")
 		writeFormattedMsg(c.Conn, c.Name+" has joined "+cr.name)
+		cr.announce(c.Name + " has joined!")
 	} else {
 		writeFormattedMsg(c.Conn, "error: could not join room")
 	}
 }
-func (c *client) help() {
-	c.Conn.Write([]byte("HELP:\n"))
-	c.Conn.Write([]byte("---------------------------\n"))
-	for k, v := range help {
-		c.Conn.Write([]byte(k + " " + v))
-	}
-	c.Conn.Write([]byte("---------------------------\n"))
-}
 
 //leave current room
 func (c *client) leave() {
-	delete(roomList[c.Room].members, c.Conn.RemoteAddr().String())
-	log.Printf("leave: removing user %v from room %v", c.Name, c.Room)
-	writeFormattedMsg(c.Conn, "leaving "+c.Room)
+	//only if room is not empty
+	if c.Room != "" {
+		delete(roomList[c.Room].members, c.Conn.RemoteAddr().String())
+		log.Printf("leave: removing user %v from room %v: current members: %v", c.Name, c.Room, roomList[c.Room].members)
+		writeFormattedMsg(c.Conn, "leaving "+c.Room)
+	}
 }
 
 func (c *client) create() {
@@ -210,24 +207,40 @@ func (c *client) create() {
 
 		if c.Room != "" {
 			c.leave()
+			roomList[c.Room].announce(c.Name + " has left..")
 		}
 		// set clients room to new room
 		c.Room = cr.name
 		// add new room to map
 		roomList[cr.name] = cr
+		cr.announce(c.Name + " has joined!")
 
-		writeFormattedMsg(c.Conn, "room "+cr.name+" has been created")
+		writeFormattedMsg(c.Conn, "* room "+cr.name+" has been created *")
 	} else {
-		writeFormattedMsg(c.Conn, "error: could not create room \""+roomName+"\"")
+		writeFormattedMsg(c.Conn, "* error: could not create room \""+roomName+"\" *")
 	}
 }
 
-func writeFormattedMsg(conn net.Conn, msg string) error {
-	_, err := conn.Write([]byte("---------------------------\n* " + msg + " *\n---------------------------\n"))
+func writeFormattedMsg(conn net.Conn, msg interface{}) error {
+	_, err := conn.Write([]byte("---------------------------\n"))
+	t := reflect.ValueOf(msg)
+	switch t.Kind() {
+	case reflect.Map:
+		for k, v := range msg.(map[string]string) {
+			_, err = conn.Write([]byte(k + " : " + v))
+		}
+		break
+	case reflect.String:
+		v := reflect.ValueOf(msg).String()
+		_, err = conn.Write([]byte(v + "\n"))
+		break
+	} //switch
+	conn.Write([]byte("---------------------------\n"))
+
 	if err != nil {
 		return err
 	}
-	return nil
+	return nil //todo
 }
 
 func readInput(conn net.Conn, qst string) (string, error) {
@@ -280,5 +293,5 @@ func createRoom(name string) *chatRoom {
 }
 
 func (c *chatRoom) announce(msg string) {
-	c.messages <- msg
+	c.messages <- "* " + msg + " *"
 }
