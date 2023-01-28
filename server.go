@@ -25,7 +25,7 @@ type chatRoom struct {
 }
 
 var flagIP = flag.String("ip", "127.0.0.1", "IP address to listen on")
-var flagPort = flag.String("port", "8181", "Port to listen on")
+var flagPort = flag.String("port", "23", "Port to listen on")
 var customTime = "02/01/2006 15:04:05"
 var help = map[string]string{
 	"\\quit":      "quit\n",
